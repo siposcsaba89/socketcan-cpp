@@ -4,21 +4,45 @@
 #include <string.h>
 
 #ifdef HAVE_SOCKETCAN_HEADERS
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
-#include <linux/can.h>
 #include <linux/can/raw.h>
 /* CAN DLC to real data length conversion helpers */
 
-static const unsigned char dlc2len[] = { 0, 1, 2, 3, 4, 5, 6, 7,
-8, 12, 16, 20, 24, 32, 48, 64 };
+static const unsigned char dlc2len[] = {0, 1, 2, 3, 4, 5, 6, 7,
+					8, 12, 16, 20, 24, 32, 48, 64};
 
 /* get data length from can_dlc with sanitized can_dlc */
 unsigned char can_dlc2len(unsigned char can_dlc)
 {
-    return dlc2len[can_dlc & 0x0F];
+	return dlc2len[can_dlc & 0x0F];
+}
+
+static const unsigned char len2dlc[] = {0, 1, 2, 3, 4, 5, 6, 7, 8,		/* 0 - 8 */
+					9, 9, 9, 9,				/* 9 - 12 */
+					10, 10, 10, 10,				/* 13 - 16 */
+					11, 11, 11, 11,				/* 17 - 20 */
+					12, 12, 12, 12,				/* 21 - 24 */
+					13, 13, 13, 13, 13, 13, 13, 13,		/* 25 - 32 */
+					14, 14, 14, 14, 14, 14, 14, 14,		/* 33 - 40 */
+					14, 14, 14, 14, 14, 14, 14, 14,		/* 41 - 48 */
+					15, 15, 15, 15, 15, 15, 15, 15,		/* 49 - 56 */
+					15, 15, 15, 15, 15, 15, 15, 15};	/* 57 - 64 */
+
+/* map the sanitized data length to an appropriate data length code */
+unsigned char can_len2dlc(unsigned char len)
+{
+	if (len > 64)
+		return 0xF;
+
+	return len2dlc[len];
 }
 
 #endif
@@ -40,7 +64,7 @@ namespace scpp
             perror("socket");
             return STATUS_SOCKET_CREATE_ERROR;
         }
-        int mtu;
+        int mtu, enable_canfd = 1;
         struct sockaddr_can addr;
         struct ifreq ifr;
 
@@ -58,7 +82,7 @@ namespace scpp
         if (mode == MODE_CANFD_MTU) 
         {
             /* check if the frame fits into the CAN netdevice */
-            if (ioctl(s, SIOCGIFMTU, &ifr) < 0) {
+            if (ioctl(m_socket, SIOCGIFMTU, &ifr) < 0) {
                 perror("SIOCGIFMTU");
                 return STATUS_MTU_ERROR;
             }
@@ -69,7 +93,7 @@ namespace scpp
             }
 
             /* interface is ok - try to switch the socket into CAN FD mode */
-            if (setsockopt(s, SOL_CAN_RAW, CAN_RAW_FD_FRAMES,
+            if (setsockopt(m_socket, SOL_CAN_RAW, CAN_RAW_FD_FRAMES,
                 &enable_canfd, sizeof(enable_canfd))) 
             {
                 
@@ -78,14 +102,14 @@ namespace scpp
 
         }
 
-        const int timestamping_flags = (SOF_TIMESTAMPING_SOFTWARE | \
-            SOF_TIMESTAMPING_RX_SOFTWARE | \
-            SOF_TIMESTAMPING_RAW_HARDWARE);
+        //const int timestamping_flags = (SOF_TIMESTAMPING_SOFTWARE | \
+        //    SOF_TIMESTAMPING_RX_SOFTWARE | \
+        //    SOF_TIMESTAMPING_RAW_HARDWARE);
 
-        if (setsockopt(m_socket, SOL_SOCKET, SO_TIMESTAMPING,
-            &timestamping_flags, sizeof(timestamping_flags)) < 0) {
-            perror("setsockopt SO_TIMESTAMPING is not supported by your Linux kernel");
-        }
+        //if (setsockopt(m_socket, SOL_SOCKET, SO_TIMESTAMPING,
+        //    &timestamping_flags, sizeof(timestamping_flags)) < 0) {
+        //    perror("setsockopt SO_TIMESTAMPING is not supported by your Linux kernel");
+        //}
 
         ///* disable default receive filter on this RAW socket */
         ///* This is obsolete as we do not read from the socket at all, but for */
@@ -93,7 +117,7 @@ namespace scpp
         ///* little (really a very little!) CPU usage.                          */
         //setsockopt(s, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
 
-        if (bind(m_sockets, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        if (bind(m_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
             perror("bind");
             return STATUS_BIND_ERROR;
         }
@@ -119,7 +143,7 @@ namespace scpp
             frame.len = can_dlc2len(can_len2dlc(frame.len));
         }
         /* send frame */
-        if (write(m_socket, &frame, m_socket_mode) != m_socket_mode) {
+        if (::write(m_socket, &frame, int(m_socket_mode)) != int(m_socket_mode)) {
             perror("write");
             return STATUS_WRITE_ERROR;
         }
@@ -153,7 +177,7 @@ namespace scpp
     SocketCanStatus SocketCan::close()
     {
 #ifdef HAVE_SOCKETCAN_HEADERS
-        close(m_socket);
+        ::close(m_socket);
 #endif
         return STATUS_OK;
     }

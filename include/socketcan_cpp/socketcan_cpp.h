@@ -6,6 +6,8 @@
 #ifndef HAVE_SOCKETCAN_HEADERS
 #define CAN_MTU 0
 #define CANFD_MTU 1
+#else
+#include <linux/can.h>
 #endif
 
 namespace scpp
