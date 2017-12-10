@@ -122,7 +122,7 @@ namespace scpp
             return STATUS_BIND_ERROR;
         }
 #else
-        printf("Your operating system does not support socket can!");
+        printf("Your operating system does not support socket can! \n");
 #endif
         return STATUS_OK;
     }
@@ -148,7 +148,7 @@ namespace scpp
             return STATUS_WRITE_ERROR;
         }
 #else
-        printf("Your operating system does not support socket can!");
+        printf("Your operating system does not support socket can! \n");
 #endif
         return STATUS_OK;
     }
@@ -170,7 +170,7 @@ namespace scpp
         msg.flags = frame.flags;
         memcpy(msg.data, frame.data, frame.len);
 #else
-        printf("Your operating system does not support socket can!");
+        printf("Your operating system does not support socket can! \n");
 #endif
         return STATUS_OK;
     }
