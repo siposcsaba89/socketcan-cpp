@@ -52,10 +52,11 @@ namespace scpp
     SocketCan::SocketCan()
     {
     }
-    SocketCanStatus SocketCan::open(const std::string & can_interface, SocketMode mode)
+    SocketCanStatus SocketCan::open(const std::string & can_interface, int32_t read_timeout_ms, SocketMode mode)
     {
         m_interface = can_interface;
         m_socket_mode = mode;
+        m_read_timeout_ms = read_timeout_ms;
 #ifdef HAVE_SOCKETCAN_HEADERS
 
         /* open socket */
@@ -117,6 +118,12 @@ namespace scpp
         ///* little (really a very little!) CPU usage.                          */
         //setsockopt(s, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
 
+// LINUX
+        struct timeval tv;
+        tv.tv_sec = 0;  /* 30 Secs Timeout */
+        tv.tv_usec = m_read_timeout_ms * 1000;  // Not init'ing this can cause strange errors
+        setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval));
+
         if (bind(m_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
             perror("bind");
             return STATUS_BIND_ERROR;
@@ -159,9 +166,9 @@ namespace scpp
 
         // Read in a CAN frame
         auto num_bytes = ::read(m_socket, &frame, CANFD_MTU);
-        if (num_bytes != CAN_MTU || num_bytes != CANFD_MTU)
+        if (num_bytes != CAN_MTU && num_bytes != CANFD_MTU)
         {
-            perror("Can read error");
+            //perror("Can read error");
             return STATUS_READ_ERROR;
         }
 
